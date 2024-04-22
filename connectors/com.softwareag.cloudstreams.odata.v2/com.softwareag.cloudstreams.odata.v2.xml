@@ -1,0 +1,377 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rest-connector displayName="OData V2"
+		group="OData" id="com.softwareag.cloudstreams.OData.v2"
+		name="OData V2" version="v2"
+		xmlns="http://www.softwareag.com/cloudstreams/metadata/handler/model"
+		xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">  
+	<description>Generic OData Version 2.0 (OData V2) Provider XML</description>
+	<connections>
+		<connection displayName="OData V2 connection" name="OData V2 connection" type="sagcloud">
+			<description>Connection for OData V2</description>
+			<groups>
+				<group type="connection" displayName="Connection" name="connection">
+					<fields>
+						<field name="cn.providerUrl"/>
+					</fields>
+				</group>
+				<group type="credentials" displayName="Credentials" name="credentials" >
+					<fields>
+						<field name="cr.username" isRequired="false"/>
+						<field name="cr.password" isRequired="false"/>
+						<field name="cr.preemptiveAuthEnabled" defaultValue="true"/>						
+					</fields>
+				</group>	
+				<group type="protocol" displayName="Transport Protocol" name="protocol"/>
+				<group type="custom" name="custom" displayName="Custom">
+					<description>Caching</description>
+					<fields>
+						<field defaultValue="false" name="cx.Caching" displayName="Caching" type="boolean"/>
+					</fields>
+				</group>
+			</groups>
+			<start>
+				<resource displayName="describeMetadata" method="GET"
+						name="describeMetadata" path="/" isHidden="true">
+
+					<description>describeMetadata</description>
+
+					<responses>
+						<response code="200" name="stream" builderType="vnd.sag.cloudstreams+binary"
+								messageFormatterType="vnd.sag.cloudstreams+binary"/>
+					</responses>
+				</resource>
+			</start>
+			<stop>
+				<resource displayName="dummyCall" method="GET"
+						name="dummyCall" path="/" isHidden="true">
+					<!-- This is an dummy call so that stop sequence is called and we can do cache cleanup, 
+						unfortunately we don't have any better option in connector framework yet, hence this stop
+						sequence is added for a time being -->
+					<description>dummyCall</description>
+                    <mappings>
+						<map context="IN" isRequired="false" displayName="dummyCall mapping to clear cache"
+							name="dummyCall_mapping">
+							<description>This is an dummy call so that stop sequence is called and we can do cache cleanup</description>
+							<source type="SERVICE">
+								<service nsName="wm.cloudstreams.odata.util:clearCache">
+									<hint>CLEAR_CACHE</hint>
+								</service>
+							</source>
+							<target type="HEADER">dummy</target>
+						</map>
+                    </mappings>
+
+					<responses>
+						<response code="200-599" name="stream" builderType="vnd.sag.cloudstreams+binary"
+								messageFormatterType="vnd.sag.cloudstreams+binary"/>
+					</responses>
+				</resource>
+			</stop>			
+		</connection>
+	</connections>
+	<services>
+		<service displayName="OData V2" name="ODataV2RestService" xsi:type="RESTServiceType"
+				endpoint="${cn.providerUrl}">
+
+			<documentModel nsName="wmODataProvider_v2.doctypes" packageName="WmODataProvider">
+				<abstractObject type="businessObject" name="record">
+					<lookup ref="wmODataProvider_v2.lookup.services:boList" type="boList"/>
+					<lookup ref="wmODataProvider_v2.lookup.services:boDescribe" type="boDescribe"/>
+				</abstractObject>
+
+			<!-- dynamicObject type is allowed only when resource is of type 'DYNAMIC' -->
+				<abstractObject type="dynamicObject" name="dObject" >
+					<lookup ref="wmODataProvider_v2.lookup.services:dboList" type="dboList"/>
+					<lookup ref="wmODataProvider_v2.lookup.services:dboDescribe" type="dboDescribe"/>
+					<lookup ref="wmODataProvider_v2.lookup.services:dboInteraction" type="dboInteractions"/>
+				</abstractObject>				
+			</documentModel>
+
+			<resources>
+
+				<!--Describe Metadata call  -->
+				<resource displayName="describeMetadata" method="GET"
+						name="describeMetadata" path="/$metadata" isHidden="true">
+
+					<description>describeMetadata</description>
+
+					<responses>
+						<response code="200-599" name="stream" builderType="vnd.sag.cloudstreams+binary"
+								messageFormatterType="vnd.sag.cloudstreams+binary"/>
+					</responses>
+				</resource>
+				
+				<resource displayName="Create" method="POST" name="Create" path="/{entitySetName}" type="COMPLEX">
+
+					<description>Create a new entity, optionally relate it with an existing entities and optionally can add inline multiple related entities.</description>
+					<properties>
+						<property name="fieldExpansionLevel" value="5"/>
+					</properties>
+
+					<mappings>
+						<map context="IN" isRequired="true" name="Create_mapping_1">
+							<source type="LITERAL">application/atom+xml</source>
+							<target type="HEADER">Content-Type</target>
+						</map>
+						<!--map context="IN" isRequired="true" name="Create_mapping_2">
+							<source type="LITERAL">application/atom+xml</source>
+							<target type="HEADER">Accept</target>
+						</map-->						
+					</mappings>
+
+					<parameters>
+						<parameter name="entitySetName" isRequired="true" style="URI_CONTEXT">
+							<description>Name of an entity set</description>
+						</parameter>
+					</parameters>
+
+					<handler nsName="wmODataProvider_v2.interactions.CreateHandler" type="java" />
+
+					<request name="stream" builderType="vnd.sag.cloudstreams+binary"
+							messageFormatterType="vnd.sag.cloudstreams+binary" documentRef="wmODataProvider_v2.doctypes:AddRecordRequest"/>
+
+					<responses>
+						<response code="200-599" name="stream" builderType="vnd.sag.cloudstreams+binary"
+								messageFormatterType="vnd.sag.cloudstreams+binary" documentRef="wmODataProvider_v2.doctypes:AddRecordResponse"/>
+					</responses>
+
+				</resource>
+
+				<resource displayName="Update" method="PUT" name="Update" path="/{entitySetName}{entityKey}" type="COMPLEX">
+
+					<description>Update existing entity. It overrides the existing entity with new values.</description>
+					<properties>
+						<property name="fieldExpansionLevel" value="5"/>
+					</properties>
+
+					<mappings>
+						<map context="IN" isRequired="true" name="Update_mapping_1">
+							<source type="LITERAL">application/atom+xml</source>
+							<target type="HEADER">Content-Type</target>
+						</map>
+						<!--map context="IN" isRequired="true" name="Update_mapping_2">
+							<source type="LITERAL">application/atom+xml</source>
+							<target type="HEADER">Accept</target>
+						</map-->						
+					</mappings>
+
+					<parameters>
+						<parameter name="entitySetName" isRequired="true" style="URI_CONTEXT">
+							<description>Name of an entity set</description>
+						</parameter>
+						<parameter name="entityKey" isRequired="true" style="URI_CONTEXT">
+							<description>entity key id</description>
+						</parameter>
+					</parameters>
+
+					<handler nsName="wmODataProvider_v2.interactions.UpdateHandler" type="java" />
+
+					<request name="stream" builderType="vnd.sag.cloudstreams+binary"
+							messageFormatterType="vnd.sag.cloudstreams+binary" documentRef="wmODataProvider_v2.doctypes:AddRecordRequest"/>
+
+					<responses>
+						<response code="200-599" name="stream" builderType="vnd.sag.cloudstreams+binary"
+								messageFormatterType="vnd.sag.cloudstreams+binary" documentRef="wmODataProvider_v2.doctypes:AddRecordResponse"/>
+					</responses>
+
+				</resource>
+
+				<resource displayName="Delete" method="DELETE" name="Delete" path="/{entitySetName}{entityKey}" type="COMPLEX">
+
+					<description>Delete existing entity.</description>
+
+					<mappings>
+						<map context="IN" isRequired="true" name="Delete_mapping_1">
+							<source type="LITERAL">application/atom+xml</source>
+							<target type="HEADER">Content-Type</target>
+						</map>
+						<!--map context="IN" isRequired="true" name="Delete_mapping_2">
+							<source type="LITERAL">application/atom+xml</source>
+							<target type="HEADER">Accept</target>
+						</map-->						
+					</mappings>
+
+					<parameters>
+						<parameter name="entitySetName" isRequired="true" style="URI_CONTEXT">
+							<description>Name of an entity set</description>
+						</parameter>
+						<parameter name="entityKey" isRequired="true" style="URI_CONTEXT">
+							<description>entity key id</description>
+						</parameter>
+					</parameters>
+
+					<handler nsName="wmODataProvider_v2.interactions.DeleteHandler" type="java" />
+
+					<responses>
+						<response code="200-599" name="stream" builderType="vnd.sag.cloudstreams+binary"
+								messageFormatterType="vnd.sag.cloudstreams+binary" documentRef="wmODataProvider_v2.doctypes:AddRecordResponse"/>
+					</responses>
+
+				</resource>
+
+				<resource displayName="Query" method="GET" name="Query" path="/{entitySetName}?" type="COMPLEX">
+					<description>Query entites based on the specified criteria.</description>
+					<properties>
+						<property name="fieldExpansionLevel" value="5"/>
+					</properties>
+					<mappings>
+						<map context="IN" isRequired="true" name="Query_mapping1">
+							<source type="LITERAL">application/atom+xml</source>
+							<target type="HEADER">Content-Type</target>
+						</map>
+						<!--map context="IN" isRequired="true" name="Query_mapping2">
+							<source type="LITERAL">application/atom+xml</source>
+							<target type="HEADER">Accept</target>
+						</map-->					
+						<map context="IN" isRequired="true" isFixed="true" name="Query_mapping_input_3">
+							<description>Set field list</description>
+							<source type="SERVICE">
+								<service nsName="pub.cloudstreams.util.services.map:delimitedString">
+									<hint>core.objectFieldList</hint>
+									<arg name="input">${core.objectFieldList}</arg>
+									<arg name="delimiter">,</arg>
+								</service>
+							</source>
+							<target type="PARAMETER">$select</target>
+						</map>
+					</mappings>					
+
+					<parameters>
+						<parameter name="entitySetName" isRequired="true" style="URI_CONTEXT">
+							<description>Name of an entity</description>
+						</parameter>
+						<parameter name="$top" dataType="String" isRequired="false" defaultValue="200" style="QUERYSTRING_PARAM">
+							<description>Number of top entities</description>
+						</parameter>
+						<parameter name="$skip" dataType="String" isRequired="false" defaultValue="0" style="QUERYSTRING_PARAM">
+							<description>Number of entities to be skipped</description>
+						</parameter>
+						<parameter name="$filter" dataType="String" isRequired="false" style="QUERYSTRING_PARAM">
+							<description>filter options</description>
+						</parameter>	
+						<parameter name="$orderby" dataType="String" isRequired="false" style="QUERYSTRING_PARAM">
+							<description>orderby options</description>
+						</parameter>	
+						<parameter name="$select" dataType="String" isRequired="true" style="QUERYSTRING_PARAM">
+							<description>Selected properties list</description>
+						</parameter>
+						<parameter name="$inlinecount" dataType="String" isRequired="true" style="QUERYSTRING_PARAM" 
+						    defaultValue="allpages" isFixed="true">
+							<description>inline count option</description>
+						</parameter>
+						<parameter name="$expand" dataType="String" isRequired="false" style="QUERYSTRING_PARAM">
+							<description>expand options</description>
+						</parameter>
+						<!--parameter name="$search"  dataType="String" isRequired="false" style="QUERYSTRING_PARAM">
+							<description>The $search system query option restricts the result to include only those entities matching the specified search expression</description>
+						</parameter>
+						<parameter name="$format"  dataType="String" isRequired="false" defaultValue="atom" style="QUERYSTRING_PARAM">
+							<description>request/response format</description>
+						</parameter-->
+
+					</parameters>
+
+					<handler nsName="wmODataProvider_v2.interactions.QueryHandler" type="java" />
+
+					<responses>
+						<response code="200-599" name="data" builderType="vnd.sag.cloudstreams+binary"
+								messageFormatterType="vnd.sag.cloudstreams+binary"
+								documentRef="wmODataProvider_v2.doctypes:queryResponse"/>
+					</responses>
+				</resource>
+
+				<resource displayName="Read" method="GET" name="Read" path="/{entitySetName}?" type="COMPLEX">
+					<description>Reads an existing entity.</description>
+					<properties>
+						<property name="fieldExpansionLevel" value="5"/>
+					</properties>
+					<mappings>
+						<map context="IN" isRequired="true" name="Read_mapping1">
+							<source type="LITERAL">application/atom+xml</source>
+							<target type="HEADER">Content-Type</target>
+						</map>
+						<!--map context="IN" isRequired="true" name="Read_mapping2">
+							<source type="LITERAL">application/atom+xml</source>
+							<target type="HEADER">Accept</target>
+						</map-->					
+						<map context="IN" isRequired="true" isFixed="true" name="Read_mapping3">
+							<description>Set field list</description>
+							<source type="SERVICE">
+								<service nsName="pub.cloudstreams.util.services.map:delimitedString">
+									<hint>core.objectFieldList</hint>
+									<arg name="input">${core.objectFieldList}</arg>
+									<arg name="delimiter">,</arg>
+								</service>
+							</source>
+							<target type="PARAMETER">$select</target>
+						</map>
+					</mappings>					
+
+					<parameters>
+						<parameter name="entitySetName" isRequired="true" style="URI_CONTEXT">
+							<description>Name of an entity</description>
+						</parameter>
+						<parameter name="$select" dataType="String" isRequired="true" style="QUERYSTRING_PARAM">
+							<description>Selected properties list</description>
+						</parameter>
+						<parameter name="$expand" dataType="String" isRequired="false" style="QUERYSTRING_PARAM">
+							<description>expand options</description>
+						</parameter>
+					</parameters>
+
+					<handler nsName="wmODataProvider_v2.interactions.ReadHandler" type="java" />
+
+					<responses>
+						<response code="200-599" name="data" builderType="vnd.sag.cloudstreams+binary"
+								messageFormatterType="vnd.sag.cloudstreams+binary"
+								documentRef="wmODataProvider_v2.doctypes:queryResponse"/>
+					</responses>
+				</resource>
+				
+				<resource displayName="Query Using Navigation" method="GET" name="QueryUsingNavigation" path="/{dynamicPath}" type="COMPLEX">
+					<description>Retrieve contained/derived entity record</description>
+					
+					<properties>
+						<property name="fieldExpansionLevel" value="5"/>
+						<property name="nestedBOList" value="true"/>
+					</properties>
+					
+					<mappings>
+						<map context="IN" isRequired="true" name="Retrieve_mapping_1">
+							<source type="LITERAL">application/json</source>
+							<target type="HEADER">Content-Type</target>
+						</map>
+					</mappings>
+					<parameters>
+						<parameter name="dynamicPath" isRequired="true" style="URI_CONTEXT">
+							<description>Full navigation path</description>
+						</parameter>
+						<parameter name="$top" dataType="String" isRequired="false" style="QUERYSTRING_PARAM">
+							<description>Number of top entities</description>
+						</parameter>
+						<parameter name="$skip" dataType="String" isRequired="false" style="QUERYSTRING_PARAM">
+							<description>Number of entities to be skipped</description>
+						</parameter>
+						<parameter name="$filter" dataType="String" isRequired="false" style="QUERYSTRING_PARAM">
+							<description>filter options</description>
+						</parameter>	
+						<parameter name="$orderby" dataType="String" isRequired="false" style="QUERYSTRING_PARAM">
+							<description>orderby options</description>
+						</parameter>
+						<parameter name="$inlinecount" dataType="String" isRequired="true" style="QUERYSTRING_PARAM">
+							<description>inline count option</description>
+						</parameter>
+					</parameters>
+					
+					<handler nsName="wmODataProvider_v2.interactions.QueryUsingNavigationHandler" type="java" />
+					
+					<request name="stream" builderType="vnd.sag.cloudstreams+binary" messageFormatterType="vnd.sag.cloudstreams+binary" documentRef="wmODataProvider_v2.doctypes:AddRecordRequest"/>
+					
+					<responses>
+						<response code="200-599" name="stream" builderType="vnd.sag.cloudstreams+binary" messageFormatterType="vnd.sag.cloudstreams+binary" documentRef="wmODataProvider_v2.doctypes:AddRecordResponse"/>
+					</responses>
+				</resource>
+			</resources>
+		</service>
+	</services>
+</rest-connector>
